@@ -1,0 +1,6 @@
+{
+  "name": "NEBULA — AI 圖片修改工作站",
+  "description": "專業級 AI 圖片修改工具，支援自訂與快捷提示詞、多種輸出比例、即時預覽、高清保存與雲端記錄同步。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
