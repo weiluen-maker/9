@@ -192,8 +192,15 @@ app.post('/api/edit-image', async (req, res) => {
   } catch (error: any) {
     console.error('Error generating image:', error);
     const durationMs = Date.now() - startTime;
+    // Format error message to be human-readable and actionable
+    let clientErrorMessage = error?.message || '處理圖片時發生未知錯誤，請稍後重試。';
+    if (typeof clientErrorMessage === 'string' && (clientErrorMessage.includes('429') || clientErrorMessage.includes('Quota exceeded') || clientErrorMessage.includes('RESOURCE_EXHAUSTED'))) {
+      clientErrorMessage = 'API 配額限制提醒 (429 Quota Exceeded)：Google Gemini 圖片生成模型（gemini-2.5-flash-image）目前在免費專案中配額上限為 0，需要啟用 Google AI Studio 計費帳戶（Paid Plan）或配置具備影像生成權限的 API Key 才能呼叫。';
+    }
+
     return res.status(500).json({
-      error: error?.message || '處理圖片時發生未知錯誤，請稍後重試。',
+      error: clientErrorMessage,
+      rawError: error?.message,
       durationMs,
     });
   }

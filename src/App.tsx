@@ -35,6 +35,7 @@ import {
   AspectRatioOption,
 } from './constants/presets';
 import { saveRecord, getAllRecords, HistoryRecord } from './utils/db';
+import { simulateImageEdit } from './utils/simulateEdit';
 
 export default function App() {
   // Image states
@@ -255,6 +256,53 @@ export default function App() {
     } catch (err: any) {
       console.error('Generation error:', err);
       setErrorMessage(err.message || '連線逾時或模型處理錯誤，請檢視網路與提示詞後重試。');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Immediate simulation generation (ideal for quota-free testing & preview)
+  const handleSimulateGenerate = async () => {
+    if (!sourceImage) {
+      setErrorMessage('請先上傳待修改的圖片。');
+      return;
+    }
+    setErrorMessage(null);
+    setIsGenerating(true);
+
+    try {
+      const simulatedResult = await simulateImageEdit(
+        sourceImage,
+        activePresetId,
+        customPrompt || 'AI 智慧風格渲染重塑',
+        selectedRatio
+      );
+
+      setResultImage(simulatedResult);
+      setResultMeta({
+        modelUsed: `${selectedModel} (模擬渲染)`,
+        durationMs: 780,
+        description: '成功套用色彩矩陣與光影映射',
+      });
+
+      const newRecord: HistoryRecord = {
+        id: `rec_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        createdAt: Date.now(),
+        originalImage: sourceImage,
+        editedImage: simulatedResult,
+        prompt: customPrompt || 'AI 智慧風格渲染重塑',
+        presetTitle: PRESET_PROMPTS.find((p) => p.id === activePresetId)?.title || '自訂修圖',
+        aspectRatio: selectedRatio,
+        modelUsed: `${selectedModel} (模擬渲染)`,
+        durationMs: 780,
+        favorite: false,
+      };
+
+      await saveRecord(newRecord);
+      await loadHistory();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage('模擬渲染時發生問題。');
     } finally {
       setIsGenerating(false);
     }
@@ -645,37 +693,63 @@ export default function App() {
 
               {/* Error Alert */}
               {errorMessage && (
-                <div className="mt-3 p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2 animate-shake">
-                  <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-                  <span>{errorMessage}</span>
+                <div className="mt-3 p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-200 text-xs flex flex-col gap-2 animate-shake">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                    <span>{errorMessage}</span>
+                  </div>
+                  <div className="pt-2 border-t border-rose-900/60 flex items-center justify-between">
+                    <span className="text-[11px] text-rose-300/80">無需等待配額，立即體驗完整流程：</span>
+                    <button
+                      type="button"
+                      onClick={handleSimulateGenerate}
+                      className="px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[11px] transition-all shadow-md"
+                    >
+                      以模擬渲染即刻體驗
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {/* Main Generate Button */}
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={isGenerating || !sourceImage}
-                className={`mt-4 w-full py-3.5 px-4 rounded-xl font-bold text-sm tracking-wide flex items-center justify-center gap-2 transition-all duration-300 shadow-xl ${
-                  isGenerating
-                    ? 'bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-700'
-                    : !sourceImage
-                    ? 'bg-slate-800/60 text-slate-500 cursor-not-allowed border border-slate-800'
-                    : 'bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-600 hover:from-cyan-300 hover:via-blue-400 hover:to-indigo-500 text-slate-950 shadow-cyan-500/30 hover:shadow-cyan-400/50 hover:scale-[1.01]'
-                }`}
-              >
-                {isGenerating ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
-                    <span>Gemini AI 運算重塑中 ({elapsedTimer.toFixed(1)}s)...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 fill-slate-950" />
-                    <span>開始生成修改圖片</span>
-                  </>
+              {/* Main Generate Button Bar */}
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={isGenerating || !sourceImage}
+                  className={`flex-1 py-3.5 px-4 rounded-xl font-bold text-sm tracking-wide flex items-center justify-center gap-2 transition-all duration-300 shadow-xl ${
+                    isGenerating
+                      ? 'bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-700'
+                      : !sourceImage
+                      ? 'bg-slate-800/60 text-slate-500 cursor-not-allowed border border-slate-800'
+                      : 'bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-600 hover:from-cyan-300 hover:via-blue-400 hover:to-indigo-500 text-slate-950 shadow-cyan-500/30 hover:shadow-cyan-400/50 hover:scale-[1.01]'
+                  }`}
+                >
+                  {isGenerating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+                      <span>Gemini AI 運算重塑中 ({elapsedTimer.toFixed(1)}s)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 fill-slate-950" />
+                      <span>開始生成修改圖片</span>
+                    </>
+                  )}
+                </button>
+
+                {sourceImage && !isGenerating && (
+                  <button
+                    type="button"
+                    onClick={handleSimulateGenerate}
+                    className="py-3.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 hover:border-cyan-400/50 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                    title="立即在本地預覽模擬渲染效果（不消耗 API 配額）"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>快速體驗</span>
+                  </button>
                 )}
-              </button>
+              </div>
             </div>
           </div>
 
